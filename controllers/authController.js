@@ -32,13 +32,28 @@ exports.register = async (req, res, next) => {
 exports.login = async (req, res, next) => {
   try {
     const { username, password } = req.body;
+
     const user = await User.findOne({ username });
-    if (!user || !(await Sverker(user.comparePassword(password)))) {
+    if (!user) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
+
+    // If this user signed up with Google, they have no password
+    if (!user.password) {
+      return res.status(400).json({ 
+        message: "Please log in with Google OAuth for this account" 
+      });
+    }
+
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({ message: "Invalid credentials" });
+    }
+
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: process.env.TOKEN_EXPIRE || "1h",
     });
+
     res.json({ token });
   } catch (error) {
     next(error);

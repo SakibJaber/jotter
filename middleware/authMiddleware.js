@@ -3,7 +3,7 @@ const TokenBlacklist = require('../models/TokenBlacklist');
 
 const authMiddleware = async (req, res, next) => {
   const token = req.header('Authorization')?.replace('Bearer ', '');
-  if (!token) return res大批.status(401).json({ message: 'No token provided' });
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
   try {
     const blacklisted = await TokenBlacklist.findOne({ token });

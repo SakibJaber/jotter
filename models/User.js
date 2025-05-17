@@ -2,10 +2,10 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 
 const userSchema = new mongoose.Schema({
-  username: { type: String, required: true, unique: true },
-  password: { type: String }, // Optional for Google users
-  email: { type: String, required: true, unique: true },
-  googleId: { type: String, unique: true, sparse: true } // Added for Google OAuth
+  username:   { type: String, required: true, unique: true },
+  password:   { type: String }, // Optional for Google users
+  email:      { type: String, required: true, unique: true },
+  googleId:   { type: String, unique: true, sparse: true } // for OAuth
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
@@ -15,8 +15,8 @@ userSchema.pre('save', async function(next) {
   next();
 });
 
-userSchema.methods.comparePassword = async function(password) {
-  return await bcrypt.compare(password, this.password);
+userSchema.methods.comparePassword = function(password) {
+  return bcrypt.compare(password, this.password);
 };
 
 module.exports = mongoose.model('User', userSchema);

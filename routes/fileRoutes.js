@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const fileController = require("../controllers/fileController");
+const authMiddleware = require("../middleware/authMiddleware");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
@@ -45,10 +46,16 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({ storage, fileFilter });
 
 router.post("/", upload.single("file"), fileController.createFile);
+router.get("/overview", authMiddleware, fileController.getStorageOverview);
 router.get("/", fileController.getFiles);
 router.get("/:id", fileController.getFile);
+router.get("/:id/content", fileController.getFileContent);
 router.put("/:id", fileController.updateFile);
 router.delete("/:id", fileController.deleteFile);
-router.get("/:id/content", fileController.getFileContent);
-
+router.put('/:id/rename', authMiddleware, fileController.renameFile);
+router.post('/:id/duplicate', authMiddleware, fileController.duplicateFile);
+router.post('/:id/copy', authMiddleware, fileController.copyFile);
+router.post('/:id/share', authMiddleware, fileController.shareFile);
+router.get('/share/:token', fileController.getSharedFile); 
+router.get('/share/:token/content', fileController.getSharedFileContent); 
 module.exports = router;

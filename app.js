@@ -20,7 +20,7 @@ connectDB();
 
 app.use('/api/auth', authRoutes);
 app.use('/api/folders', authMiddleware, folderRoutes);
-app.use('/api/files', authMiddleware, fileRoutes);
+app.use('/api/files', fileRoutes);
 
 // Temporary success route for Google redirect
 app.get('/auth/success', (req, res) => {
