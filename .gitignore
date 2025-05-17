@@ -2,6 +2,12 @@
 node_modules/
 npm-debug.log
 
+# Ignore everything inside uploads/images
+uploads/images/*
+
+# Ignore everything inside uploads/documents
+uploads/documents/*
+
 # Env files
 .env
 
