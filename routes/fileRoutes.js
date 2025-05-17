@@ -33,10 +33,7 @@ const storage = multer.diskStorage({
 });
 
 const fileFilter = (req, file, cb) => {
-  if (
-    file.mimetype === "application/pdf" ||
-    file.mimetype.startsWith("image/")
-  ) {
+  if (file.mimetype === "application/pdf" || file.mimetype.startsWith("image/")) {
     cb(null, true);
   } else {
     cb(new Error("Invalid file type"), false);
@@ -45,17 +42,19 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({ storage, fileFilter });
 
-router.post("/", upload.single("file"), fileController.createFile);
+router.post("/", authMiddleware, upload.single("file"), fileController.createFile);
 router.get("/overview", authMiddleware, fileController.getStorageOverview);
-router.get("/", fileController.getFiles);
-router.get("/:id", fileController.getFile);
-router.get("/:id/content", fileController.getFileContent);
-router.put("/:id", fileController.updateFile);
-router.delete("/:id", fileController.deleteFile);
-router.put('/:id/rename', authMiddleware, fileController.renameFile);
-router.post('/:id/duplicate', authMiddleware, fileController.duplicateFile);
-router.post('/:id/copy', authMiddleware, fileController.copyFile);
-router.post('/:id/share', authMiddleware, fileController.shareFile);
-router.get('/share/:token', fileController.getSharedFile); 
-router.get('/share/:token/content', fileController.getSharedFileContent); 
+router.get("/storage-details", authMiddleware, fileController.getStorageDetails);
+router.get("/", authMiddleware, fileController.getFiles);
+router.get("/:id", authMiddleware, fileController.getFile);
+router.get("/:id/content", authMiddleware, fileController.getFileContent);
+router.put("/:id", authMiddleware, fileController.updateFile);
+router.delete("/:id", authMiddleware, fileController.deleteFile);
+router.put("/:id/rename", authMiddleware, fileController.renameFile);
+router.post("/:id/duplicate", authMiddleware, fileController.duplicateFile);
+router.post("/:id/copy", authMiddleware, fileController.copyFile);
+router.post("/:id/share", authMiddleware, fileController.shareFile);
+router.get("/share/:token", fileController.getSharedFile);
+router.get("/share/:token/content", fileController.getSharedFileContent);
+
 module.exports = router;

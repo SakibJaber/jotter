@@ -7,20 +7,35 @@ const crypto = require("crypto");
 exports.createFile = async (req, res, next) => {
   try {
     const { name, type, folderId } = req.body;
-    const userId = req.user.id;
-    let filePath, content;
+    if (!req.user || !req.user.id) {
+      return res.status(401).json({ message: "Unauthorized: User not authenticated" });
+    }
 
+    const userId = req.user.id;
+    let filePath = null;
+    let content = null;
+
+    // Validate file type and uploaded file consistency
     if (type === "document") {
       content = req.body.content;
-      if (!content)
-        return res
-          .status(400)
-          .json({ message: "Content is required for documents" });
+      if (!content) {
+        return res.status(400).json({ message: "Content is required for documents" });
+      }
+      if (req.file) {
+        return res.status(400).json({ message: "File upload not allowed for document type" });
+      }
     } else if (type === "pdf" || type === "image") {
-      if (!req.file)
-        return res
-          .status(400)
-          .json({ message: "File is required for pdf and image types" });
+      if (!req.file) {
+        return res.status(400).json({ message: "File is required for pdf and image types" });
+      }
+      // Validate file MIME type matches the specified type
+      const mimeType = req.file.mimetype;
+      if (type === "pdf" && mimeType !== "application/pdf") {
+        return res.status(400).json({ message: "Uploaded file must be a PDF for type 'pdf'" });
+      }
+      if (type === "image" && !mimeType.startsWith("image/")) {
+        return res.status(400).json({ message: "Uploaded file must be an image for type 'image'" });
+      }
       filePath = req.file.path;
     } else {
       return res.status(400).json({ message: "Invalid file type" });
@@ -36,7 +51,12 @@ exports.createFile = async (req, res, next) => {
       isFavorite: false,
     });
     await file.save();
-    res.status(201).json(file);
+    const response = {
+      ...file.toObject(),
+      content: file.type === "document" ? file.content : null,
+      contentUrl: file.type !== "document" && file.filePath ? `/api/files/${file._id}/content` : null,
+    };
+    res.status(201).json(response);
   } catch (error) {
     next(error);
   }
@@ -67,8 +87,7 @@ exports.getFiles = async (req, res, next) => {
     const formattedFiles = files.map((file) => ({
       ...file.toObject(),
       content: file.type === "document" ? file.content : null,
-      contentUrl:
-        file.type !== "document" ? `/api/files/${file._id}/content` : null,
+      contentUrl: file.type !== "document" && file.filePath ? `/api/files/${file._id}/content` : null,
     }));
 
     res.json({
@@ -95,8 +114,7 @@ exports.getFile = async (req, res, next) => {
     const response = {
       ...file.toObject(),
       content: file.type === "document" ? file.content : null,
-      contentUrl:
-        file.type !== "document" ? `/api/files/${file._id}/content` : null,
+      contentUrl: file.type !== "document" && file.filePath ? `/api/files/${file._id}/content` : null,
     };
     res.json(response);
   } catch (error) {
@@ -114,16 +132,14 @@ exports.updateFile = async (req, res, next) => {
     if (!file) return res.status(404).json({ message: "File not found" });
 
     if (name) file.name = name;
-    if (file.type === "document" && content !== undefined)
-      file.content = content;
+    if (file.type === "document" && content !== undefined) file.content = content;
     if (isFavorite !== undefined) file.isFavorite = isFavorite;
 
     await file.save();
     const response = {
       ...file.toObject(),
       content: file.type === "document" ? file.content : null,
-      contentUrl:
-        file.type !== "document" ? `/api/files/${file._id}/content` : null,
+      contentUrl: file.type !== "document" && file.filePath ? `/api/files/${file._id}/content` : null,
     };
     res.json(response);
   } catch (error) {
@@ -151,8 +167,7 @@ exports.getFileContent = async (req, res, next) => {
       _id: req.params.id,
       userId: req.user.id,
     });
-    if (!file || file.type === "document")
-      return res.status(404).json({ message: "File not found" });
+    if (!file || file.type === "document") return res.status(404).json({ message: "File not found" });
     res.sendFile(path.resolve(file.filePath));
   } catch (error) {
     next(error);
@@ -164,7 +179,6 @@ exports.getStorageOverview = async (req, res, next) => {
     const TOTAL_STORAGE = 15 * 1024 * 1024 * 1024; // 15GB in bytes
     const userId = req.user.id;
 
-    // Get all files for the user
     const files = await File.find({ userId });
 
     let usedSpace = 0;
@@ -172,22 +186,19 @@ exports.getStorageOverview = async (req, res, next) => {
       if (file.filePath && (file.type === "pdf" || file.type === "image")) {
         try {
           const stats = fs.statSync(file.filePath);
-          usedSpace += stats.size; // Add file size in bytes
+          usedSpace += stats.size;
         } catch (error) {
-          // Skip files that may have been deleted or are inaccessible
           console.error(`Error reading file ${file.filePath}:`, error.message);
         }
       } else if (file.type === "document" && file.content) {
-        // Estimate document size (UTF-8 string length in bytes)
         usedSpace += Buffer.byteLength(file.content, "utf8");
       }
     }
 
     const availableSpace = TOTAL_STORAGE - usedSpace;
 
-    // Convert to human-readable format
     const formatBytes = (bytes) => {
-      const units = ["B", "KB", "MB", "GB"];
+      const units = ["B", "KB", "MB", "GB", "TB"];
       let size = bytes;
       let unitIndex = 0;
       while (size >= 1024 && unitIndex < units.length - 1) {
@@ -216,7 +227,77 @@ exports.getStorageOverview = async (req, res, next) => {
   }
 };
 
-//
+exports.getStorageDetails = async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+
+    // Get all PDF and image files for the user
+    const files = await File.find({ userId, type: { $in: ["pdf", "image"] } });
+
+    let totalUsedSpace = 0;
+    const fileDetails = [];
+
+    for (const file of files) {
+      let size = 0;
+      if (file.filePath) {
+        try {
+          const stats = fs.statSync(file.filePath);
+          size = stats.size;
+          totalUsedSpace += size;
+        } catch (error) {
+          console.error(`Error reading file ${file.filePath}:`, error.message);
+          continue; // Skip inaccessible files
+        }
+      } else {
+        console.warn(`File ${file._id} (${file.name}) has no filePath`);
+      }
+
+      const formatBytes = (bytes) => {
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let size = bytes;
+        let unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.length - 1) {
+          size /= 1024;
+          unitIndex++;
+        }
+        return `${size.toFixed(2)} ${units[unitIndex]}`;
+      };
+
+      fileDetails.push({
+        id: file._id,
+        name: file.name,
+        type: file.type,
+        size: {
+          bytes: size,
+          humanReadable: formatBytes(size),
+        },
+        filePath: file.filePath,
+        createdAt: file.createdAt,
+      });
+    }
+
+    const formatBytes = (bytes) => {
+      const units = ["B", "KB", "MB", "GB", "TB"];
+      let size = bytes;
+      let unitIndex = 0;
+      while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+      }
+      return `${size.toFixed(2)} ${units[unitIndex]}`;
+    };
+
+    res.json({
+      files: fileDetails,
+      totalUsedSpace: {
+        bytes: totalUsedSpace,
+        humanReadable: formatBytes(totalUsedSpace),
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};
 
 exports.renameFile = async (req, res, next) => {
   try {
@@ -254,8 +335,7 @@ exports.renameFile = async (req, res, next) => {
     const response = {
       ...file.toObject(),
       content: file.type === "document" ? file.content : null,
-      contentUrl:
-        file.type !== "document" ? `/api/files/${file._id}/content` : null,
+      contentUrl: file.type !== "document" && file.filePath ? `/api/files/${file._id}/content` : null,
     };
     res.json(response);
   } catch (error) {
@@ -281,10 +361,7 @@ exports.duplicateFile = async (req, res, next) => {
 
     if (file.type === "document") {
       newFileData.content = file.content;
-    } else if (
-      file.filePath &&
-      (file.type === "pdf" || file.type === "image")
-    ) {
+    } else if (file.filePath && (file.type === "pdf" || file.type === "image")) {
       const oldPath = file.filePath;
       const ext = path.extname(oldPath);
       const dirname = path.dirname(oldPath);
@@ -308,10 +385,7 @@ exports.duplicateFile = async (req, res, next) => {
     const response = {
       ...newFile.toObject(),
       content: newFile.type === "document" ? newFile.content : null,
-      contentUrl:
-        newFile.type !== "document"
-          ? `/api/files/${newFile._id}/content`
-          : null,
+      contentUrl: newFile.type !== "document" && newFile.filePath ? `/api/files/${newFile._id}/content` : null,
     };
     res.status(201).json(response);
   } catch (error) {
@@ -322,8 +396,7 @@ exports.duplicateFile = async (req, res, next) => {
 exports.copyFile = async (req, res, next) => {
   try {
     const { folderId } = req.body;
-    if (!folderId)
-      return res.status(400).json({ message: "Target folderId is required" });
+    if (!folderId) return res.status(400).json({ message: "Target folderId is required" });
 
     const file = await File.findOne({
       _id: req.params.id,
@@ -336,8 +409,7 @@ exports.copyFile = async (req, res, next) => {
       _id: folderId,
       userId: req.user.id,
     });
-    if (!folder)
-      return res.status(404).json({ message: "Target folder not found" });
+    if (!folder) return res.status(404).json({ message: "Target folder not found" });
 
     const newFileData = {
       name: file.name,
@@ -349,10 +421,7 @@ exports.copyFile = async (req, res, next) => {
 
     if (file.type === "document") {
       newFileData.content = file.content;
-    } else if (
-      file.filePath &&
-      (file.type === "pdf" || file.type === "image")
-    ) {
+    } else if (file.filePath && (file.type === "pdf" || file.type === "image")) {
       const oldPath = file.filePath;
       const ext = path.extname(oldPath);
       const dirname = path.dirname(oldPath);
@@ -376,10 +445,7 @@ exports.copyFile = async (req, res, next) => {
     const response = {
       ...newFile.toObject(),
       content: newFile.type === "document" ? newFile.content : null,
-      contentUrl:
-        newFile.type !== "document"
-          ? `/api/files/${newFile._id}/content`
-          : null,
+      contentUrl: newFile.type !== "document" && newFile.filePath ? `/api/files/${newFile._id}/content` : null,
     };
     res.status(201).json(response);
   } catch (error) {
@@ -391,9 +457,7 @@ exports.shareFile = async (req, res, next) => {
   try {
     const { expiresInDays = 7 } = req.body;
     if (expiresInDays < 1 || expiresInDays > 30) {
-      return res
-        .status(400)
-        .json({ message: "Expiration must be between 1 and 30 days" });
+      return res.status(400).json({ message: "Expiration must be between 1 and 30 days" });
     }
 
     const file = await File.findOne({
@@ -403,9 +467,7 @@ exports.shareFile = async (req, res, next) => {
     if (!file) return res.status(404).json({ message: "File not found" });
 
     const token = crypto.randomBytes(12).toString("base64url");
-    const expiresAt = new Date(
-      Date.now() + expiresInDays * 24 * 60 * 60 * 1000
-    );
+    const expiresAt = new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000);
 
     const shareLink = new ShareLink({ fileId: file._id, token, expiresAt });
     await shareLink.save();
@@ -425,18 +487,13 @@ exports.getSharedFile = async (req, res, next) => {
     }).populate("fileId");
 
     if (!shareLink || !shareLink.fileId) {
-      return res
-        .status(404)
-        .json({ message: "Share link is invalid or expired" });
+      return res.status(404).json({ message: "Share link is invalid or expired" });
     }
     const file = shareLink.fileId;
     const response = {
       ...file.toObject(),
       content: file.type === "document" ? file.content : null,
-      contentUrl:
-        file.type !== "document"
-          ? `/api/files/share/${req.params.token}/content`
-          : null,
+      contentUrl: file.type !== "document" && file.filePath ? `/api/files/share/${req.params.token}/content` : null,
     };
 
     res.json(response);
@@ -452,14 +509,8 @@ exports.getSharedFileContent = async (req, res, next) => {
       expiresAt: { $gt: new Date() },
     }).populate("fileId");
 
-    if (
-      !shareLink ||
-      !shareLink.fileId ||
-      shareLink.fileId.type === "document"
-    ) {
-      return res
-        .status(404)
-        .json({ message: "Share link is invalid or expired" });
+    if (!shareLink || !shareLink.fileId || shareLink.fileId.type === "document") {
+      return res.status(404).json({ message: "Share link is invalid or expired" });
     }
 
     res.sendFile(path.resolve(shareLink.fileId.filePath));
