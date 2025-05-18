@@ -45,6 +45,7 @@ const upload = multer({ storage, fileFilter });
 router.post("/", authMiddleware, upload.single("file"), fileController.createFile);
 router.get("/overview", authMiddleware, fileController.getStorageOverview);
 router.get("/storage-details", authMiddleware, fileController.getStorageDetails);
+router.get("/filter-by-date", authMiddleware, fileController.getFilesByDate); 
 router.get("/", authMiddleware, fileController.getFiles);
 router.get("/:id", authMiddleware, fileController.getFile);
 router.get("/:id/content", authMiddleware, fileController.getFileContent);

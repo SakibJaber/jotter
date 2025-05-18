@@ -40,6 +40,7 @@ Jotter is a Node.js-based storage management system that allows users to upload,
 - **Multer**: Middleware for handling file uploads.
 - **JWT**: JSON Web Tokens for authentication.
 - **Crypto**: For generating secure share tokens.
+- **Moment**: For parse, validate, manipulate, and display dates and times.
 
 ---
 
@@ -117,6 +118,7 @@ Jotter is a Node.js-based storage management system that allows users to upload,
 - `POST /api/files/:id/copy`: Copy file to another folder.
 - `POST /api/files/:id/share`: Generate a share link.
 - `GET /api/files/share/:token`: Access shared file.
+- `GET /api/files/filter-by-date`: Date Filtering.
 - `GET /api/files/share/:token/content`: Download shared content.
 
 ### Storage
@@ -155,6 +157,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ---
 
-**Author**: Sakib Jaber  
+**Author**: Sakib Al Jaber  
 **GitHub**: [https://github.com/SakibJaber/jotter](https://github.com/SakibJaber/jotter)
 

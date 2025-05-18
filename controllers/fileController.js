@@ -3,6 +3,7 @@ const ShareLink = require("../models/ShareLink");
 const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
+const moment = require("moment");
 
 exports.createFile = async (req, res, next) => {
   try {
@@ -514,6 +515,71 @@ exports.getSharedFileContent = async (req, res, next) => {
     }
 
     res.sendFile(path.resolve(shareLink.fileId.filePath));
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getFilesByDate = async (req, res, next) => {
+  try {
+    const {
+      date,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      page = 1,
+      limit = 10,
+      folderId,
+      isFavorite,
+    } = req.query;
+
+    // Validate date parameter
+    if (!date) {
+      return res.status(400).json({ message: "Date parameter is required" });
+    }
+    const parsedDate = moment(date, "YYYY-MM-DD", true);
+    if (!parsedDate.isValid()) {
+      return res.status(400).json({ message: "Invalid date format. Use YYYY-MM-DD" });
+    }
+
+    // Create date range for the entire day
+    const startOfDay = parsedDate.startOf("day").toDate();
+    const endOfDay = parsedDate.endOf("day").toDate();
+
+    // Build query
+    const query = {
+      userId: req.user.id,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    };
+    if (folderId) query.folderId = folderId;
+    if (isFavorite !== undefined) query.isFavorite = isFavorite === "true";
+
+    // Set up sorting and pagination
+    const sort = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+    const skip = (page - 1) * limit;
+
+    // Fetch files
+    const files = await File.find(query)
+      .sort(sort)
+      .skip(skip)
+      .limit(parseInt(limit));
+    const total = await File.countDocuments(query);
+
+    // Format response
+    const formattedFiles = files.map((file) => ({
+      ...file.toObject(),
+      content: file.type === "document" ? file.content : null,
+      contentUrl: file.type !== "document" && file.filePath ? `/api/files/${file._id}/content` : null,
+    }));
+
+    res.json({
+      data: formattedFiles,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(total / limit),
+      },
+    });
   } catch (error) {
     next(error);
   }
