@@ -14,9 +14,7 @@ Jotter is a Node.js-based storage management system that allows users to upload,
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [API Endpoints](#api-endpoints)
-- [Usage](#usage)
 - [Testing](#testing)
-- [Contributing](#contributing)
 - [License](#license)
 
 ---
@@ -88,25 +86,6 @@ Jotter is a Node.js-based storage management system that allows users to upload,
 
    Replace `your_jwt_secret_key` with a strong, secure key.
 
-2. **Database Models**:
-
-   Ensure the following Mongoose schema is defined in `models/File.js`:
-
-   ```js
-   const mongoose = require('mongoose');
-
-   const fileSchema = new mongoose.Schema({
-     name: { type: String, required: true },
-     type: { type: String, enum: ['document', 'pdf', 'image'], required: true },
-     folderId: { type: mongoose.Schema.Types.ObjectId, ref: 'Folder', default: null },
-     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-     filePath: { type: String, default: null },
-     content: { type: String, default: null },
-     isFavorite: { type: Boolean, default: false },
-   }, { timestamps: true });
-
-   module.exports = mongoose.model('File', fileSchema);
-   ```
 
 ---
 
@@ -116,6 +95,14 @@ Jotter is a Node.js-based storage management system that allows users to upload,
 
 - `POST /api/auth/register`: Register a new user.
 - `POST /api/auth/login`: Log in and receive a JWT.
+- `POST /api/auth/forgot-password`: Request a password reset.
+- `POST /api/auth/verify-code`: Verify reset code.
+- `POST /api/auth/reset-password`: Reset password.
+- `POST /api/auth/logout`: Log out (requires auth).
+- `DELETE /api/auth/me`: Delete the current user (requires auth).
+
+- `GET /api/auth/google`: Start Google OAuth login.
+- `GET /api/auth/google/callback`: Google OAuth callback URL.
 
 ### File Management
 
@@ -137,47 +124,18 @@ Jotter is a Node.js-based storage management system that allows users to upload,
 - `GET /api/files/overview`: Get 15GB storage overview.
 - `GET /api/files/storage-details`: Detailed file sizes and paths.
 
----
+### Folder Management
 
-## Usage
-
-1. **Start the Server**:
-
-   ```bash
-   npm start
-   ```
-
-   The server runs at: `http://localhost:3000`
-
-2. **Test with Postman**:
-
-   - Import the `StorageManagementSystem.postman_collection.json` from the repo.
-   - Example upload request (form-data):
-
-     ```json
-     {
-       "method": "POST",
-       "header": [
-         { "key": "Authorization", "value": "Bearer {{authToken}}" }
-       ],
-       "body": {
-         "mode": "formdata",
-         "formdata": [
-           { "key": "name", "value": "Sample PDF", "type": "text" },
-           { "key": "type", "value": "pdf", "type": "text" },
-           { "key": "folderId", "value": "<folder_id>", "type": "text" },
-           { "key": "file", "type": "file", "src": "/path/to/sample.pdf" }
-         ]
-       },
-       "url": "{{baseUrl}}/api/files"
-     }
-     ```
-
-3. **Check Storage Status**:
-
-   - Call `GET /api/files/storage-details` to see used space and file data.
+- `POST /api/folders`: Create a folder.
+- `GET /api/folders`: List folders.
+- `GET /api/folders/:id`: Get folder details.
+- `PUT /api/folders/:id`: Update folder.
+- `DELETE /api/folders/:id`: Delete folder.
 
 ---
+
+
+
 
 ## Testing
 
@@ -186,35 +144,10 @@ Jotter is a Node.js-based storage management system that allows users to upload,
   - Confirm uploads in `uploads/documents/` and `uploads/images/`.
   - Use MongoDB shell or Compass to inspect file metadata.
 
-- **Automated Testing**:
-  - You can write tests with Jest, Mocha, or Supertest under a `tests/` directory (not yet implemented).
 
 ---
 
-## Contributing
 
-1. Fork the repository.
-2. Create a feature branch:
-
-   ```bash
-   git checkout -b feature/your-feature
-   ```
-
-3. Commit your changes:
-
-   ```bash
-   git commit -m "Add your feature"
-   ```
-
-4. Push the branch:
-
-   ```bash
-   git push origin feature/your-feature
-   ```
-
-5. Open a Pull Request.
-
----
 
 ## License
 
@@ -224,3 +157,4 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 **Author**: Sakib Jaber  
 **GitHub**: [https://github.com/SakibJaber/jotter](https://github.com/SakibJaber/jotter)
+
